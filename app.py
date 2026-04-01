@@ -7,16 +7,16 @@ from datetime import datetime
 def init_db():
     conn = sqlite3.connect('lentis_optic_v26.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS locatii 
+    c.execute('''CREATE TABLE IF NOT EXISTS locatii
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, nume_locatie TEXT, adresa TEXT, contact TEXT, tel TEXT, note TEXT, data TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS clienti 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, id_locatie INTEGER, nume TEXT, varsta INTEGER, tel TEXT, 
-                  tip_l TEXT, nume_lentila TEXT, regim TEXT, sf_od TEXT, cl_od TEXT, ax_od TEXT, sf_os TEXT, cl_os TEXT, ax_os TEXT, 
-                  addit TEXT, dp TEXT, rama TEXT, p_rama REAL, p_lent REAL, total REAL, 
+    c.execute('''CREATE TABLE IF NOT EXISTS clienti
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, id_locatie INTEGER, nume TEXT, varsta INTEGER, tel TEXT,
+                  tip_l TEXT, nume_lentila TEXT, regim TEXT, sf_od TEXT, cl_od TEXT, ax_od TEXT, sf_os TEXT, cl_os TEXT, ax_os TEXT,
+                  addit TEXT, dp TEXT, rama TEXT, p_rama REAL, p_lent REAL, total REAL,
                   status TEXT, data_comanda TEXT, data_livrare TEXT, note TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS plati 
+    c.execute('''CREATE TABLE IF NOT EXISTS plati
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, id_client INTEGER, suma REAL, data TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS utilizatori 
+    c.execute('''CREATE TABLE IF NOT EXISTS utilizatori
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, rol TEXT)''')
     try:
         c.execute("INSERT INTO utilizatori (username, password, rol) VALUES (?,?,?)", ("admin", "lentis2024", "Admin"))
@@ -102,7 +102,7 @@ elif choice == "👥 Adaugă Client":
         l_sel = st.selectbox("🔍 Locație *:", n_loc, index=st.session_state['ultima_locatie_index'])
         st.session_state['ultima_locatie_index'] = n_loc.index(l_sel)
         id_l = int(loc_df[loc_df['nume_locatie'] == l_sel]['id'].values[0])
-        
+       
         with st.form("f_cli", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             nume, tel = c1.text_input("Nume Complet *"), c1.text_input("Telefon *")
@@ -114,11 +114,11 @@ elif choice == "👥 Adaugă Client":
             sod, sos = d2.text_input("Sf OD"), d2.text_input("Sf OS"); cod, cos = d3.text_input("Cil OD"), d3.text_input("Cil OS")
             aod, aos = d4.text_input("Ax OD"), d4.text_input("Ax OS"); add, dp = d5.text_input("Adiție"), d6.text_input("DP")
             note_p = st.text_area("Note (Opțional)")
-            
+           
             if st.form_submit_button("✅ SALVEAZĂ"):
                 errs = [k for k, v in {"Nume": nume, "Tel": tel, "Lentilă": nl, "Ramă": rama}.items() if not v]
                 if not errs and (pr+pl) > 0:
-                    conn.execute('''INSERT INTO clienti (id_locatie, nume, tel, tip_l, nume_lentila, sf_od, cl_od, ax_od, sf_os, cl_os, ax_os, addit, dp, rama, p_rama, p_lent, total, status, data_comanda, data_livrare, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', 
+                    conn.execute('''INSERT INTO clienti (id_locatie, nume, tel, tip_l, nume_lentila, sf_od, cl_od, ax_od, sf_os, cl_os, ax_os, addit, dp, rama, p_rama, p_lent, total, status, data_comanda, data_livrare, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                                     (id_l, nume, tel, tl, nl, sod, cod, aod, sos, cos, aos, add, dp, rama, pr, pl, pr+pl, "Comandă Nouă", data_c.strftime("%d-%m-%Y"), data_l.strftime("%d-%m-%Y"), note_p))
                     conn.commit(); st.success("✅ Salvat!"); st.rerun()
                 else: st.error(f"⚠️ Lipsesc: {', '.join(errs) if errs else 'Preț total'}")
@@ -127,7 +127,7 @@ elif choice == "👥 Adaugă Client":
 elif choice == "📋 Tabel Plăți & Fișe":
     st.header("📋 Gestiune Clienți")
     search = st.text_input("🔍 Caută după nume:", "").strip().lower()
-    
+   
     df = pd.read_sql_query('''SELECT c.id, l.nume_locatie as Folder, c.nume as Pacient, c.status, c.total,
                               COALESCE((SELECT SUM(suma) FROM plati WHERE id_client = c.id), 0) as platit
                               FROM clienti c JOIN locatii l ON c.id_locatie = l.id''', conn)
@@ -149,7 +149,7 @@ elif choice == "📋 Tabel Plăți & Fișe":
         id_p = st.session_state['selected_client_id']
         det = pd.read_sql_query(f"SELECT * FROM clienti WHERE id = {id_p}", conn).iloc[0]
         pl_ist = pd.read_sql_query(f"SELECT id, suma, data FROM plati WHERE id_client = {id_p}", conn)
-        
+       
         st.divider(); st.subheader(f"📑 FIȘA: {det['nume']}")
         f1, f2, f3 = st.columns([1.5, 1, 1])
         with f1:
@@ -159,7 +159,23 @@ elif choice == "📋 Tabel Plăți & Fișe":
                 n_nt = st.text_area("📝 Note (Se salvează la buton):", value=det['note'], key=f"nt_{id_p}")
                 if st.button("Salvează Note"):
                     conn.execute("UPDATE clienti SET note=? WHERE id=?", (n_nt, id_p)); conn.commit(); st.rerun()
-            else: st.info(f"Note: {det['note']}")
+                
+                # --- BUTON ȘTERGERE CLIENT (DOAR ADMIN) ---
+                st.divider()
+                with st.expander("🗑️ Zonă Periculoasă"):
+                    confirm_del = st.checkbox("Confirm ștergerea definitivă a acestui client")
+                    if st.button("Șterge Client Complet", type="secondary"):
+                        if confirm_del:
+                            conn.execute(f"DELETE FROM plati WHERE id_client = {id_p}")
+                            conn.execute(f"DELETE FROM clienti WHERE id = {id_p}")
+                            conn.commit()
+                            st.session_state['selected_client_id'] = None
+                            st.success("Client șters!")
+                            st.rerun()
+                        else:
+                            st.warning("Bifează confirmarea pentru a șterge.")
+            else: 
+                st.info(f"Note: {det['note']}")
         with f2:
             st.metric("REST", f"{(det['total'] - pl_ist['suma'].sum()):,.2f} RON")
             if is_admin:
@@ -168,20 +184,20 @@ elif choice == "📋 Tabel Plăți & Fișe":
                     if r_n > 0:
                         conn.execute("INSERT INTO plati (id_client, suma, data) VALUES (?,?,?)", (id_p, r_n, datetime.now().strftime("%d-%m-%Y %H:%M")))
                         conn.commit(); st.rerun()
-                
+               
                 # ACTUALIZARE AUTOMATĂ STATUS
-                stati = ["Comandă Nouă", "Comandată", "Livrată + Rate", "Finalizată"]
+                stati = ["Comandă Nouă", "Comandată", "Livrată + Rate", "Finalizată", "Problemă"]
                 current_idx = stati.index(det['status']) if det['status'] in stati else 0
                 n_s = st.selectbox("Status Comandă (Se salvează automat):", stati, index=current_idx, key=f"st_{id_p}")
-                
+               
                 if n_s != det['status']:
                     conn.execute("UPDATE clienti SET status=? WHERE id=?", (n_s, id_p))
                     conn.commit()
                     st.rerun()
-                    
+                   
         with f3:
             st.write("📜 Istoric:"); st.dataframe(pl_ist[['suma', 'data']], hide_index=True)
-            if is_admin and not pl_ist.empty and st.button("🗑️ Șterge Ultima"):
+            if is_admin and not pl_ist.empty and st.button("🗑️ Șterge Ultima Plată"):
                 conn.execute(f"DELETE FROM plati WHERE id = (SELECT MAX(id) FROM plati WHERE id_client = {id_p})"); conn.commit(); st.rerun()
 
 # --- 4. ADMINISTRARE USERI ---
